@@ -95,9 +95,12 @@ class StatusWidget(QWidget):
 
     def on_status_update(self, item):
         rows = []
+        if 'delete' in item:
+            print('delete {} {}'.format(item['id'],item['delete']))
         if item['delete']:
             for i in range(self.table_widget.rowCount()):
                 if self.table_widget.cellWidget(i,7).text() == item['id']:
+                    print('delete {} row {}'.format(item['id'],i))
                     rows.append(i)
             for r in rows:
                 if r < self.table_widget.rowCount():

@@ -17,6 +17,7 @@ from PyQt5.QtCore import QObject, pyqtSignal, QTimer, QThread
 class ActionHandler(QObject):
 
     sig_error = pyqtSignal(str)
+    sig_remove_fleet = pyqtSignal(dict)
 
     def __init__(self, profile):
         super().__init__()
@@ -64,6 +65,9 @@ class ActionHandler(QObject):
                         SpotFleetRequestIds=[item['fleet_id']],
                         TerminateInstances=True
                     )
+                    self.sig_remove_fleet.emit({
+                        'id': item['fleet_id']
+                    })
             except ClientError as e:
                 print(e)
                 self.sig_error.emit(str(e))

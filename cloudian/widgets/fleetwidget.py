@@ -54,6 +54,11 @@ class FleetWidget(QWidget):
         clipboard = QApplication.instance().clipboard()
         clipboard.setText(txt)
 
+    def on_error_update(self,item):
+        for i in range(self.table_widget.rowCount()):
+            if self.table_widget.cellWidget(i,1).text() == item['id']:
+                self.table_widget.cellWidget(0,3).setToolTip(item['error'])
+
     def on_status_update(self, item):
         if item['delete']:
             rows = []

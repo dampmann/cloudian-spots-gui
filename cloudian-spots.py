@@ -13,6 +13,7 @@ from cloudian.handlers import ActionHandler
 from cloudian.handlers import FleetRequestHandler
 from cloudian.pricecalculator import PriceCalculator
 from cloudian.updaters import InstanceUpdater
+from cloudian.updaters import FleetErrorUpdater
 from cloudian.updaters import FleetUpdater
 from cloudian.loaders import IdLoader, FleetRoleLoader, RegionLoader
 from cloudian.loaders import S3ResourceLoader
@@ -34,6 +35,7 @@ class MainWindow(QWidget):
     sig_id_lookup = pyqtSignal(str)
     sig_request_fleet = pyqtSignal(dict)
     sig_start_updater = pyqtSignal()
+    sig_start_fleet_error_updater = pyqtSignal()
     sig_start_fleet_updater = pyqtSignal()
     sig_start_requester = pyqtSignal()
     sig_start_id_thread = pyqtSignal()
@@ -74,10 +76,20 @@ class MainWindow(QWidget):
         self.delete_volumes = True
         self.expires = 8
 
+        self.fleet_error_updater_thread = QThread()
+        self.fleet_error_updater_thread.started.connect(self.sig_start_fleet_error_updater)
+        self.fleet_error_updater = FleetErrorUpdater(profile)
+        self.fleet_error_updater.sig_error.connect(self.on_error)
+        QApplication.instance().aboutToQuit.connect(self.fleet_error_updater.stop)
+        self.fleet_error_updater.moveToThread(self.fleet_error_updater_thread)
+        self.sig_start_fleet_error_updater.connect(self.fleet_error_updater.start_thread)
+        self.fleet_error_updater_thread.start()
+
         self.action_handler_thread = QThread()
         self.action_handler_thread.started.connect(self.sig_start_action_handler) 
         self.action_handler = ActionHandler(profile)
         self.action_handler.sig_error.connect(self.on_error)
+        self.action_handler.sig_remove_fleet.connect(self.fleet_error_updater.remove_fleet_item)
         self.sig_reboot_instance.connect(self.action_handler.enqueue_action)
         self.sig_terminate_instance.connect(self.action_handler.enqueue_action)
         self.sig_cancel_fleet_request.connect(self.action_handler.enqueue_action)
@@ -196,6 +208,7 @@ class MainWindow(QWidget):
         self.fleet_updater.moveToThread(self.fleet_updater_thread)
         self.fleet_updater.sig_update_status.connect(self.sig_update_fleet_status)
         self.fleet_updater.sig_update_instances.connect(self.instance_updater.on_update_instances)
+        self.fleet_updater.sig_request_error.connect(self.fleet_error_updater.append_fleet_item)
         self.sig_start_fleet_updater.connect(self.fleet_updater.start_thread)
         self.fleet_updater_thread.start()
 
@@ -464,18 +477,23 @@ class MainWindow(QWidget):
                 target_capacity += self.table_widget.cellWidget(i,3).value() 
                 num_spares += self.table_widget.cellWidget(i,3).value()
                 if i == 0:
-                    region = self.table_widget.cellWidget(i,0).text()
-                    az = self.table_widget.cellWidget(i,1).text()
-                    req['region'] = region
-                    req['az'] = az
-                    req['security_group_id'] = self.id_table[region]['sg']
-                    req['subnet_id'] = self.id_table[region][az]
-                    req['ami'] = self.id_table[region][amitag]
-                    req['target_capacity'] = target_capacity
-                    req['num_nodes'] = str(num_nodes)
-                    req['num_spares'] = str(num_spares)
-                    req['leader_election'] = '1'
-                    self.sig_request_fleet.emit(req)
+                    try:
+                        region = self.table_widget.cellWidget(i,0).text()
+                        az = self.table_widget.cellWidget(i,1).text()
+                        req['region'] = region
+                        req['az'] = az
+                        req['security_group_id'] = self.id_table[region]['sg']
+                        req['subnet_id'] = self.id_table[region][az]
+                        req['ami'] = self.id_table[region][amitag]
+                        req['target_capacity'] = target_capacity
+                        req['num_nodes'] = str(num_nodes)
+                        req['num_spares'] = str(num_spares)
+                        req['leader_election'] = '1'
+                        self.sig_request_fleet.emit(req)
+                    except KeyError:
+#FIXME Handle this one, this just avoids a crash for now
+                        print("ID's not available.")
+                        return
         else:
             for i in reversed(range(self.table_widget.rowCount())):
                 region = self.table_widget.cellWidget(i,0).text()
@@ -626,6 +644,7 @@ class MainWindow(QWidget):
         self.on_recalculate_price('')
 
     def about_to_quit(self):
+        self.fleet_error_updater_thread.wait()
         self.action_handler_thread.wait()
         self.region_loader_thread.wait()
         self.binary_loader_thread.wait()
