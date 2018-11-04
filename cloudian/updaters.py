@@ -231,11 +231,13 @@ class InstanceUpdater(QObject):
         self.fleet_list = []
 
     def update_status(self):
+        print("InstanceUpdater update_status {}".format(self.fleet_list))
         if self.stop_exec:
             self.timer.stop()
             QThread.currentThread().quit()
             return
-        for item in self.fleet_list:
+        while len(self.fleet_list) > 0:
+            item = self.fleet_list.pop()
             try:
                 s = boto3.Session(
                         profile_name=self.profile,
@@ -303,6 +305,8 @@ class InstanceUpdater(QObject):
         self.timer.start(1000)
 
     def on_update_instances(self, item):
+        print("InstanceUpdater on_update_instances {}".format(item))
+        print("InstanceUpdater on_update_instances {}".format(self.fleet_list))
         self.fleet_list.append(item)
 
     def stop(self):

@@ -84,6 +84,7 @@ cb_nu=___COSBENCH_NUMUSER___
 custom_script="___CUSTOM_SCRIPT___"
 storage_policy="___STORAGE_POLICY___"
 enforce_logical="___ENFORCE_LOGICAL___"
+do_install="___DO_INSTALL___"
 
 this_region=$(curl http://169.254.169.254/latest/meta-data/placement/availability-zone | sed 's/.$//')
 echo $this_region > /root/cloudian-spots/this_region
@@ -183,58 +184,62 @@ else
                 ssh -o StrictHostKeyChecking=no $iip hostname $hn 
             done
         fi
-        echo -e "$(date) Configuring cloudian ports  \e[1;33m [ PENDING ] \e[0m" >>/root/cloudian-spots/startup.log
-        ./cfg_cloudian_ports.sh
-        echo -e "$(date) Configuring cloudian ports  \e[1;32m [ OK ] \e[0m" >> /root/cloudian-spots/startup.log
-        echo -e "$(date) Unpacking cloudian bin file  \e[1;33m [ PENDING ] \e[0m" >>/root/cloudian-spots/startup.log
-        echo "Unpacking cloudian software" >> /root/cloudian-spots/startup.log
-        cd /root/CloudianPackages/
-        /bin/sh ./CloudianHyper*.bin ./cloudian_12345.lic >> /root/cloudian-spots/startup.log
-        echo -e "$(date) Unpacking cloudian bin file  \e[1;32m [ OK ] \e[0m" >> /root/cloudian-spots/startup.log
-        sed -i 's/cloudian.s3.max_user_buckets=<%= @cloudian_s3_max_user_buckets %>/cloudian.s3.max_user_buckets=1000/' /etc/cloudian-*-puppet/modules/cloudians3/templates/mts.properties.erb
-        sed -i 's/cloudian_s3_max_user_buckets,100/cloudian_s3_max_user_buckets,1000/' /etc/cloudian-*-puppet/manifests/extdata/dynsettings.csv
-        echo -e "$(date) Starting cloudian installation  \e[1;33m [ PENDING ] \e[0m" >>/root/cloudian-spots/startup.log
-        ./cloudianInstall.sh -b -s survey.csv -k /root/.ssh/id_rsa force configure-dnsmasq >> /root/cloudian-spots/startup.log
-        echo -e "$(date) Cloudian installation  \e[1;32m [ OK ] \e[0m" >> /root/cloudian-spots/startup.log
-        echo -e "$(date) Setting up users and groups  \e[1;33m [ PENDING ] \e[0m" >>/root/cloudian-spots/startup.log
-        /root/cloudian-spots/setup_user_group.sh
-        echo -e "$(date) Setting up users and groups  \e[1;32m [ DONE ] \e[0m" >>/root/cloudian-spots/startup.log
-        echo -e "$(date) Setting up SSL  \e[1;33m [ PENDING ] \e[0m" >>/root/cloudian-spots/startup.log
-        /root/cloudian-spots/setup_ssl.sh
-        echo -e "$(date) Setting up SSL  \e[1;32m [ DONE ] \e[0m" >>/root/cloudian-spots/startup.log
-        echo -e "$(date) Setting up storage policy  \e[1;33m [ PENDING ] \e[0m" >>/root/cloudian-spots/startup.log
-        /root/cloudian-spots/setup_storage_policy.sh
-        echo -e "$(date) Setting up storage policy  \e[1;32m [ DONE ] \e[0m" >>/root/cloudian-spots/startup.log
-        cd /root/cloudian-spots/
-        if [ -e cosbench.zip ]; then
-            echo -e "$(date) Unpacking cosbench  \e[1;33m [ PENDING ] \e[0m" >>/root/cloudian-spots/startup.log
-            unzip cosbench.zip
-            echo -e "$(date) Unpacking cosbench  \e[1;32m [ DONE ] \e[0m" >>/root/cloudian-spots/startup.log
-            cp -f controller.conf cosbench/conf/
-            cp -f driver.conf cosbench/conf/
-            cd /root/cloudian-spots/cosbench
-            echo -e "$(date) Starting cosbench  \e[1;33m [ PENDING ] \e[0m" >>/root/cloudian-spots/startup.log
-            ./start-cosbench.sh
+        if ((do_install == 1)); then
+            echo -e "$(date) Configuring cloudian ports  \e[1;33m [ PENDING ] \e[0m" >>/root/cloudian-spots/startup.log
+            ./cfg_cloudian_ports.sh
+            echo -e "$(date) Configuring cloudian ports  \e[1;32m [ OK ] \e[0m" >> /root/cloudian-spots/startup.log
+            echo -e "$(date) Unpacking cloudian bin file  \e[1;33m [ PENDING ] \e[0m" >>/root/cloudian-spots/startup.log
+            echo "Unpacking cloudian software" >> /root/cloudian-spots/startup.log
+            cd /root/CloudianPackages/
+            /bin/sh ./CloudianHyper*.bin ./cloudian_12345.lic >> /root/cloudian-spots/startup.log
+            echo -e "$(date) Unpacking cloudian bin file  \e[1;32m [ OK ] \e[0m" >> /root/cloudian-spots/startup.log
+            sed -i 's/cloudian.s3.max_user_buckets=<%= @cloudian_s3_max_user_buckets %>/cloudian.s3.max_user_buckets=1000/' /etc/cloudian-*-puppet/modules/cloudians3/templates/mts.properties.erb
+            sed -i 's/cloudian_s3_max_user_buckets,100/cloudian_s3_max_user_buckets,1000/' /etc/cloudian-*-puppet/manifests/extdata/dynsettings.csv
+            echo -e "$(date) Starting cloudian installation  \e[1;33m [ PENDING ] \e[0m" >>/root/cloudian-spots/startup.log
+            ./cloudianInstall.sh -b -s survey.csv -k /root/.ssh/id_rsa force configure-dnsmasq >> /root/cloudian-spots/startup.log
+            echo -e "$(date) Cloudian installation  \e[1;32m [ OK ] \e[0m" >> /root/cloudian-spots/startup.log
+            echo -e "$(date) Setting up users and groups  \e[1;33m [ PENDING ] \e[0m" >>/root/cloudian-spots/startup.log
+            /root/cloudian-spots/setup_user_group.sh
+            echo -e "$(date) Setting up users and groups  \e[1;32m [ DONE ] \e[0m" >>/root/cloudian-spots/startup.log
+            echo -e "$(date) Setting up SSL  \e[1;33m [ PENDING ] \e[0m" >>/root/cloudian-spots/startup.log
+            /root/cloudian-spots/setup_ssl.sh
+            echo -e "$(date) Setting up SSL  \e[1;32m [ DONE ] \e[0m" >>/root/cloudian-spots/startup.log
+            echo -e "$(date) Setting up storage policy  \e[1;33m [ PENDING ] \e[0m" >>/root/cloudian-spots/startup.log
+            /root/cloudian-spots/setup_storage_policy.sh
+            echo -e "$(date) Setting up storage policy  \e[1;32m [ DONE ] \e[0m" >>/root/cloudian-spots/startup.log
             cd /root/cloudian-spots/
-            if [ $cb_wl != "None" ]; then
-                ak=$(cat /root/cloudian-spots/ak)
-                sk=$(cat /root/cloudian-spots/sk)
-                sed -i "s:__AK__:$ak:" /root/cloudian-spots/workload.xml
-                sed -i "s:__SK__:$sk:" /root/cloudian-spots/workload.xml
-                ep=""
-                if ((cb_ssl == 1)); then
-                    ep=$(echo "https://s3.${setup_tag}.cloudian-spots.com")
-                else
-                    ep=$(echo "http://s3.${setup_tag}.cloudian-spots.com")
+            if [ -e cosbench.zip ]; then
+                echo -e "$(date) Unpacking cosbench  \e[1;33m [ PENDING ] \e[0m" >>/root/cloudian-spots/startup.log
+                unzip cosbench.zip
+                echo -e "$(date) Unpacking cosbench  \e[1;32m [ DONE ] \e[0m" >>/root/cloudian-spots/startup.log
+                cp -f controller.conf cosbench/conf/
+                cp -f driver.conf cosbench/conf/
+                cd /root/cloudian-spots/cosbench
+                echo -e "$(date) Starting cosbench  \e[1;33m [ PENDING ] \e[0m" >>/root/cloudian-spots/startup.log
+                ./start-cosbench.sh
+                cd /root/cloudian-spots/
+                if [ $cb_wl != "None" ]; then
+                    ak=$(cat /root/cloudian-spots/ak)
+                    sk=$(cat /root/cloudian-spots/sk)
+                    sed -i "s:__AK__:$ak:" /root/cloudian-spots/workload.xml
+                    sed -i "s:__SK__:$sk:" /root/cloudian-spots/workload.xml
+                    ep=""
+                    if ((cb_ssl == 1)); then
+                        ep=$(echo "https://s3.${setup_tag}.cloudian-spots.com")
+                    else
+                        ep=$(echo "http://s3.${setup_tag}.cloudian-spots.com")
+                    fi
+                    sed -i "s:__IP__:$ep:" /root/cloudian-spots/workload.xml
+                    echo "${this_ip} s3.${setup_tag}.cloudian-spots.com" >> /etc/hosts
+                    echo "${this_ip} s3-admin.${setup_tag}.cloudian-spots.com" >> /etc/hosts
+                    echo -e "$(date) submitting workload  \e[1;33m [ PENDING ] \e[0m" >>/root/cloudian-spots/startup.log
+                    curl "http://cosbench.${setup_tag}.cloudian-spots.com:19088/controller/cli/submit.action?username=anonymous&password=cosbench" -F "config=@/root/cloudian-spots/workload.xml" >> /root/cloudian-spots/startup.log
+                    echo -e "$(date) submitting workload  \e[1;32m [ DONE ] \e[0m" >>/root/cloudian-spots/startup.log
                 fi
-                sed -i "s:__IP__:$ep:" /root/cloudian-spots/workload.xml
-                echo "${this_ip} s3.${setup_tag}.cloudian-spots.com" >> /etc/hosts
-                echo "${this_ip} s3-admin.${setup_tag}.cloudian-spots.com" >> /etc/hosts
-                echo -e "$(date) submitting workload  \e[1;33m [ PENDING ] \e[0m" >>/root/cloudian-spots/startup.log
-                curl "http://cosbench.${setup_tag}.cloudian-spots.com:19088/controller/cli/submit.action?username=anonymous&password=cosbench" -F "config=@/root/cloudian-spots/workload.xml" >> /root/cloudian-spots/startup.log
-                echo -e "$(date) submitting workload  \e[1;32m [ DONE ] \e[0m" >>/root/cloudian-spots/startup.log
+                echo -e "$(date) Starting cosbench  \e[1;32m [ DONE ] \e[0m" >>/root/cloudian-spots/startup.log
             fi
-            echo -e "$(date) Starting cosbench  \e[1;32m [ DONE ] \e[0m" >>/root/cloudian-spots/startup.log
+        else
+            echo -e "$(date) No install selected  \e[1;32m [ CONTINUE ] \e[0m" >>/root/cloudian-spots/startup.log
         fi
         if [ $custom_script != "None" ]; then
             echo -e "$(date) Starting ${custom_script}  \e[1;33m [ PENDING ] \e[0m" >>/root/cloudian-spots/startup.log
