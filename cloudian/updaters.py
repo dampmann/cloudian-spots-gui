@@ -1,11 +1,70 @@
 import boto3
 import json
+import datetime
 from cloudian.awsdatastructures import boto_config
 from socket import gaierror
 from urllib3.exceptions import NewConnectionError
 from botocore.exceptions import ClientError
 from botocore.exceptions import EndpointConnectionError
 from PyQt5.QtCore import QObject, pyqtSignal, QTimer, QThread
+
+class BudgetUpdater(QObject):
+    sig_update_budget = pyqtSignal(dict)
+    sig_error = pyqtSignal(str)
+    def __init__(self, profile, account_id):
+        super().__init__()
+        self.profile = profile
+        self.account_id = account_id
+        self.stop_exec = False
+
+    def update_budget(self):
+        if self.stop_exec:
+            self.timer.stop()
+            QThread.currentThread().quit()
+            return
+        try:
+            s = boto3.Session(profile_name=self.profile)
+            bc = s.client('budgets')
+            r = bc.describe_budget(
+                AccountId=self.account_id,
+                BudgetName='AccountBudget'        
+            )
+
+            calculated_spend = r['Budget']['CalculatedSpend']
+            budget_update = {
+                'forecasted': calculated_spend['ForecastedSpend']['Amount'],
+                'actual': calculated_spend['ActualSpend']['Amount'],
+                'limit': r['Budget']['BudgetLimit']['Amount']
+            }
+
+            self.sig_update_budget.emit(budget_update)
+        except ClientError as e:
+            print(e)
+            self.sig_error.emit(str(e))
+            pass
+        except gaierror as e:
+            print(e)
+            self.sig_error.emit(str(e))
+            pass
+        except NewConnectionError as e:
+            print(e)
+            self.sig_error.emit(str(e))
+            pass
+        except EndpointConnectionError as e:
+            print(e)
+            self.sig_error.emit(str(e))
+            pass
+        except KeyError as e:
+            print(e)
+
+    def start_thread(self):
+        print("Budget Updater started")
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.update_budget)
+        self.timer.start(1000)
+
+    def stop(self):
+        self.stop_exec = True
 
 class FleetErrorUpdater(QObject):
     sig_update_status = pyqtSignal(dict)
@@ -21,11 +80,12 @@ class FleetErrorUpdater(QObject):
             self.timer.stop()
             QThread.currentThread().quit()
             return
-        for i in self.fleet_list:
+        while len(self.fleet_list) > 0:
+            i = self.fleet_list.pop()
             try:
                 s = boto3.Session(
                         profile_name=self.profile, 
-                        region_name=['region'])
+                        region_name=i['region'])
                 ec2 = s.client('ec2')
                 if self.stop_exec:
                     self.timer.stop()
@@ -34,24 +94,27 @@ class FleetErrorUpdater(QObject):
                 fleets = ec2.describe_spot_fleet_request_history(
                     EventType='error',
                     SpotFleetRequestId=i['id'],
-                    StartTime=i['start_time']
+                    StartTime=(
+                        datetime.datetime.utcnow()-datetime.timedelta(hours=2)
+                    ).isoformat(timespec='seconds')
                 )
                 if 'HistoryRecords' in fleets:
                     for hi in fleets['HistoryRecords']:
-                        if hi['EventSubType'] == 'iamFleetRoleInvalid':
+                        if hi['EventInformation']['EventSubType'] == 'iamFleetRoleInvalid':
+                            err = hi['EventInformation']['EventDescription']
                             self.sig_update_status.emit({
                                 'id': i['id'],
-                                'error': 'The IAM fleet role is not valid,\nplease contact peer on slack.'
+                                'error': hi['EventInformation']['EventDescription']
                             })
-                        elif hi['EventSubType'] == 'spotFleetRequestConfigurationInvalid':
+                        elif hi['EventInformation']['EventSubType'] == 'spotFleetRequestConfigurationInvalid':
                             self.sig_update_status.emit({
                                 'id': i['id'],
-                                'error': 'The fleet request config is not valid,\nplease contact peer on slack.'
+                                'error': hi['EventInformation']['EventDescription']
                             })
-                        elif hi['EventSubType'] == 'spotInstanceCountLimitExceeded':
+                        elif hi['EventInformation']['EventSubType'] == 'spotInstanceCountLimitExceeded':
                             self.sig_update_status.emit({
                                 'id': i['id'],
-                                'error': 'The fleet request exceeded the resources available,\nplease terminate it.'
+                                'error': hi['EventInformation']['EventDescription']
                             })
 
             except ClientError as e:
@@ -164,7 +227,7 @@ class FleetUpdater(QObject):
                                         'delete': fleet_item['delete']
                                     }
                                 )
-                                if fr['SpotFleetRequestState'] == 'error':
+                                if fr['ActivityStatus'] == 'error':
                                     self.sig_request_error.emit({
                                         'id': fr['SpotFleetRequestId'],
                                         'region': r['RegionName'],
@@ -231,7 +294,6 @@ class InstanceUpdater(QObject):
         self.fleet_list = []
 
     def update_status(self):
-        print("InstanceUpdater update_status {}".format(self.fleet_list))
         if self.stop_exec:
             self.timer.stop()
             QThread.currentThread().quit()
@@ -305,8 +367,6 @@ class InstanceUpdater(QObject):
         self.timer.start(1000)
 
     def on_update_instances(self, item):
-        print("InstanceUpdater on_update_instances {}".format(item))
-        print("InstanceUpdater on_update_instances {}".format(self.fleet_list))
         self.fleet_list.append(item)
 
     def stop(self):

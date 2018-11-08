@@ -130,13 +130,13 @@ class FleetRequestHandler(QObject):
                 ls['TagSpecifications'].append(
                         {'ResourceType': 'instance', 'Tags':[
                         {'Key': 'cloudian-spots', 'Value': spec['tag']},
-                        {'Key': 'slack', 'Value': spec['slack']}]})
+                        {'Key': 'username', 'Value': spec['username']}]})
 
                 for v in ls['BlockDeviceMappings']:
                     if 'DeleteOnTermination' in v:
                         v['DeleteOnTermination'] = spec['delete_volumes']
 
-                ud = ''.join( map(str,pathlib.Path('spots.sh').read_text()))
+                ud = ''.join( map(str,pathlib.Path('cloudian/scripts/spots.sh').read_text()))
                 ud = ud.replace('___ENFORCE_LOGICAL___', 
                         spec['enforce_logical'])
                 ud = ud.replace('___AK___', spec['access_key'])

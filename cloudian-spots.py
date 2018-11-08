@@ -1,3 +1,5 @@
+import os
+import stat
 import sys
 import subprocess
 import boto3
@@ -7,6 +9,10 @@ import string
 import random
 import base64
 import argparse
+from socket import gaierror
+from urllib3.exceptions import NewConnectionError
+from botocore.exceptions import ClientError
+from botocore.exceptions import EndpointConnectionError
 from cloudian.awsdatastructures import block_device_mappings, launch_spec
 from cloudian.awsdatastructures import request_config
 from cloudian.handlers import ActionHandler
@@ -15,6 +21,7 @@ from cloudian.pricecalculator import PriceCalculator
 from cloudian.updaters import InstanceUpdater
 from cloudian.updaters import FleetErrorUpdater
 from cloudian.updaters import FleetUpdater
+from cloudian.updaters import BudgetUpdater
 from cloudian.loaders import IdLoader, FleetRoleLoader, RegionLoader
 from cloudian.loaders import S3ResourceLoader
 from cloudian.widgets.settingswidget import SettingsWidget
@@ -46,20 +53,25 @@ class MainWindow(QWidget):
     sig_start_workload_loader = pyqtSignal()
     sig_start_region_loader = pyqtSignal()
     sig_start_action_handler = pyqtSignal()
+    sig_start_budget_updater = pyqtSignal()
     sig_update_status = pyqtSignal(dict)
     sig_update_fleet_status = pyqtSignal(dict)
+    sig_update_fleet_error = pyqtSignal(dict)
     sig_reboot_instance = pyqtSignal(dict)
     sig_cancel_fleet_request = pyqtSignal(dict)
     sig_terminate_instance = pyqtSignal(dict)
+    sig_budget_exceeded = pyqtSignal()
 
-    def __init__(self, profile, default_region, slack):
+    def __init__(self, profile, default_region, username, account_id):
         QWidget.__init__(self)
+        self.profile = profile
         self.table_headers = ['Region','data center', '# nodes', '# spares']
         amazon_session = boto3.Session(profile_name=profile, 
                 region_name=default_region)
         self.access_key = amazon_session.get_credentials().access_key 
         self.secret_key = amazon_session.get_credentials().secret_key 
-        self.slack = slack
+        self.username = username
+        self.account_id = account_id
         self.install_binary = 'None'
         self.storage_policy = 'None'
         self.cscript = 'None'
@@ -75,11 +87,26 @@ class MainWindow(QWidget):
         self.do_install = 1
         self.delete_volumes = True
         self.expires = 8
+        self.budget = {}
+        self.exceeded = False
+
+        self.sig_price_update.connect(self.on_check_budget)
+        self.sig_budget_exceeded.connect(self.on_budget_exceeded)
+        self.budget_updater_thread = QThread()
+        self.budget_updater_thread.started.connect(self.sig_start_budget_updater)
+        self.budget_updater = BudgetUpdater(self.profile,self.account_id)
+        self.budget_updater.sig_error.connect(self.on_error)
+        self.budget_updater.sig_update_budget.connect(self.on_update_budget)
+        QApplication.instance().aboutToQuit.connect(self.budget_updater.stop)
+        self.budget_updater.moveToThread(self.budget_updater_thread)
+        self.sig_start_budget_updater.connect(self.budget_updater.start_thread)
+        self.budget_updater_thread.start()
 
         self.fleet_error_updater_thread = QThread()
         self.fleet_error_updater_thread.started.connect(self.sig_start_fleet_error_updater)
         self.fleet_error_updater = FleetErrorUpdater(profile)
         self.fleet_error_updater.sig_error.connect(self.on_error)
+        self.fleet_error_updater.sig_update_status.connect(self.sig_update_fleet_error)
         QApplication.instance().aboutToQuit.connect(self.fleet_error_updater.stop)
         self.fleet_error_updater.moveToThread(self.fleet_error_updater_thread)
         self.sig_start_fleet_error_updater.connect(self.fleet_error_updater.start_thread)
@@ -303,6 +330,22 @@ class MainWindow(QWidget):
         self.setLayout(self.main_layout)
         QApplication.instance().aboutToQuit.connect(self.about_to_quit)
 
+    def on_budget_exceeded(self):
+        self.exceeded = True
+        msg = QMessageBox()
+        msg.setText('The budget limit for this account is exceeded.\nPlease contact your manager')
+        msg.exec()
+
+    def on_check_budget(self,v):
+        if 'limit' in self.budget:
+            summe = v + float(self.budget['forecasted'])
+            if summe >= float(self.budget['limit']):
+                self.sig_budget_exceeded.emit()
+                self.install_button.setEnabled(False)
+            
+    def on_update_budget(self,b):
+        self.budget = b
+
     def on_error(self,m):
         self.error_label.setText(m)
 
@@ -467,7 +510,7 @@ class MainWindow(QWidget):
                 'cosbench_wl': self.cb_wl,
                 'cosbench_users': self.cb_users,
                 'delete_volumes': self.delete_volumes,
-                'slack': self.slack,
+                'username': self.username,
                 'leader_election': '0'
             }
 
@@ -531,7 +574,7 @@ class MainWindow(QWidget):
                     'cosbench_wl': self.cb_wl,
                     'cosbench_users': self.cb_users,
                     'delete_volumes': self.delete_volumes,
-                    'slack': self.slack,
+                    'username': self.username,
                     'leader_election': '0'
                 }
                 if i == 0:
@@ -644,6 +687,7 @@ class MainWindow(QWidget):
         self.on_recalculate_price('')
 
     def about_to_quit(self):
+        self.budget_updater_thread.wait()
         self.fleet_error_updater_thread.wait()
         self.action_handler_thread.wait()
         self.region_loader_thread.wait()
@@ -658,25 +702,72 @@ class MainWindow(QWidget):
         self.id_thread.wait()
 
 def main():
+    username = ''
+    account_id = 0
     parser = argparse.ArgumentParser(
             description = 'Start Cloudian clusters on AWS'
     )
 
     parser.add_argument("-p", "--profile", default='default', help="Amazon profile name (default)")
-    parser.add_argument("-s", "--slack", default='', help="Slack name")
     parser.add_argument("-r", "--region", default='us-east-2', help="Default region (us-east-2)")
     parser.add_argument("-n", "--nogui", default=False, action='store_true', help="Use command line")
     argv = parser.parse_args()
-    if argv.slack == '':
-        print("You have to provide your slack name using -s")
+    print("Starting and downloading key files.")
+    try:
+        s = boto3.Session(profile_name=argv.profile,region_name=argv.region)
+        iam = s.client('iam')
+        response = iam.get_user()
+        if 'User' in response:
+            if 'UserName' in response['User']:
+                username = response['User']['UserName']
+            else:
+                print("Unable to get your username.")
+                sys.exit(1)
+        else:
+            print("Unable to get your username.")
+            sys.exit(1)
+
+        account_id = s.client('sts').get_caller_identity().get('Account')
+        s3 = s.resource('s3')
+        home = str(pathlib.Path.home())
+        pub_key = home + '/AWS-SPOTS-KEY.pub'
+        priv_key = home + '/AWS-SPOTS-KEY'
+        s3.meta.client.download_file(
+                'cloudian-qtspots', 
+                'keys/AWS-SPOT-ROOT', 
+                priv_key)
+        s3.meta.client.download_file(
+                'cloudian-qtspots', 
+                'keys/AWS-SPOT-ROOT.pub', 
+                pub_key)
+
+        s3.meta.client.download_file(
+                'cloudian-qtspots', 
+                'automation/spots.sh', 
+                'cloudian/scripts/spots.sh')
+        os.chmod(pub_key, stat.S_IRUSR|stat.S_IWUSR)
+        os.chmod(priv_key, stat.S_IRUSR|stat.S_IWUSR)
+
+    except ClientError as e:
+        print(e)
         sys.exit(1)
+    except gaierror as e:
+        print(e)
+        sys.exit(1)
+    except NewConnectionError as e:
+        print(e)
+        sys.exit(1)
+    except EndpointConnectionError as e:
+        print(e)
+        sys.exit(1)
+
     # Load spots.sh
     app = QApplication(sys.argv)
     window = QMainWindow()
     window.setWindowTitle(
             "Cloudian tool to launch clusters using AWS spot instances")
     tab_widget = QTabWidget()
-    w = MainWindow(argv.profile, argv.region, argv.slack)
+    w = MainWindow(argv.profile, argv.region, username, account_id)
     status_widget = StatusWidget()
     fleet_widget = FleetWidget()
     fleet_widget.sig_cancel_fleet_request.connect(w.on_cancel_fleet)
@@ -690,6 +781,7 @@ def main():
     tab_widget.addTab(status_widget, "Instance Status")
     w.sig_update_status.connect(status_widget.on_status_update)
     w.sig_update_fleet_status.connect(fleet_widget.on_status_update)
+    w.sig_update_fleet_error.connect(fleet_widget.on_error_update)
     window.setCentralWidget(tab_widget)
     window.move(0, 0)
     window.resize(900,700)

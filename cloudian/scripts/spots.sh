@@ -100,7 +100,6 @@ hn=$(echo "ch-${this_region}-${this_az}-${hsuffix1}-${hsuffix2}")
 lhn=$(curl http://169.254.169.254/latest/meta-data/local-hostname/ | cut -d '.' -f 2-)
 echo "$ip ${hn}.${lhn} $hn" >> /etc/hosts
 hostname $hn
-echo $hn > /etc/hostname
 sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
 sed -i 's/#PermitRootLogin yes/PermitRootLogin yes/' /etc/ssh/sshd_config
 if [ $v == 6 ]; then service sshd restart; else systemctl restart sshd.service; fi

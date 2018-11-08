@@ -16,7 +16,8 @@ class FleetWidget(QWidget):
                                 'State',
                                 'Capacity',
                                 'Fulfilled',
-                                'Valid Until']
+                                'Valid Until',
+                                'Error']
         self.main_layout = QVBoxLayout()
         self.setLayout(self.main_layout)
         self.table_widget = QTableWidget()
@@ -55,9 +56,12 @@ class FleetWidget(QWidget):
         clipboard.setText(txt)
 
     def on_error_update(self,item):
+        print("=== on error update ===")
         for i in range(self.table_widget.rowCount()):
             if self.table_widget.cellWidget(i,1).text() == item['id']:
-                self.table_widget.cellWidget(0,3).setToolTip(item['error'])
+                self.table_widget.cellWidget(0,7).setText(item['error'])
+                self.table_widget.resizeColumnsToContents()
+                self.table_widget.resizeRowsToContents()
 
     def on_status_update(self, item):
         if item['delete']:
@@ -106,6 +110,10 @@ class FleetWidget(QWidget):
             self.table_widget.setCellWidget(0, 6, QLabel(item['valid_until']))
             self.table_widget.cellWidget(0,6).setAlignment(Qt.AlignHCenter|Qt.AlignVCenter)
             self.table_widget.cellWidget(0,6).setMargin(10)
+            self.table_widget.setCellWidget(0, 7, QLabel('-'))
+            self.table_widget.cellWidget(0,7).setAlignment(Qt.AlignHCenter|Qt.AlignVCenter)
+            self.table_widget.cellWidget(0,7).setMargin(10)
+            self.table_widget.cellWidget(0,7).setWordWrap(True)
             self.table_widget.resizeColumnsToContents()
             self.table_widget.resizeRowsToContents()
 
