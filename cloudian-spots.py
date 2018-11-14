@@ -189,7 +189,7 @@ class MainWindow(QWidget):
         self.cscript_widget.sig_item_activated.connect(self.on_remote_combo_change)
         self.cscript_loader_thread = QThread()
         self.cscript_loader_thread.started.connect(self.sig_start_cscript_loader)
-        self.cscript_loader = S3ResourceLoader(profile,default_region,'customscripts/')
+        self.cscript_loader = S3ResourceLoader(profile,default_region,'customscripts/','.sh')
         self.cscript_loader.setObjectName('cscript_loader')
         self.cscript_loader.moveToThread(self.cscript_loader_thread)
         QApplication.instance().aboutToQuit.connect(self.cscript_loader.stop)
@@ -206,7 +206,7 @@ class MainWindow(QWidget):
         self.workload_combo.sig_item_activated.connect(self.on_remote_combo_change)
         self.workload_loader_thread = QThread()
         self.workload_loader_thread.started.connect(self.sig_start_workload_loader)
-        self.workload_loader = S3ResourceLoader(profile,default_region,'workloads/')
+        self.workload_loader = S3ResourceLoader(profile,default_region,'workloads/','.xml')
         self.workload_loader.setObjectName('workload_loader')
         self.workload_loader.moveToThread(self.workload_loader_thread)
         QApplication.instance().aboutToQuit.connect(self.workload_loader.stop)
@@ -280,6 +280,7 @@ class MainWindow(QWidget):
         self.settings_dialog = QDialog()
         self.settings_dialog.setWindowTitle("Change general settings")
         self.settings_widget = SettingsWidget()
+        self.settings_widget.sig_ok_clicked.connect(self.settings_dialog.accept)
         self.settings_widget.sig_do_install.connect(self.on_do_install_clicked)
         self.settings_widget.sig_delete_volumes.connect(
                 self.on_delete_volumes_clicked)
@@ -291,6 +292,7 @@ class MainWindow(QWidget):
         self.cosbench_dialog = QDialog()
         self.cosbench_dialog.setWindowTitle("Adjust cosbench settings")
         self.cosbench_widget = CosbenchWidget(self.workload_combo)
+        self.cosbench_widget.sig_ok_clicked.connect(self.cosbench_dialog.accept)
         self.cosbench_widget.sig_cb_ssl_clicked.connect(self.on_cb_ssl_clicked)
         self.cosbench_widget.sig_cb_num_user_changed.connect(
                 self.on_cb_users_changed)
@@ -582,6 +584,11 @@ class MainWindow(QWidget):
                 self.sig_request_fleet.emit(req)
         self.install_button.setEnabled(True)
         self.region_widget.setEnabled(True)
+        info = QMessageBox()
+        info.setText(
+            "Please check the fleet status tab,\nyour request should show up there in a few seconds"
+        )
+        info.exec()
 
     def on_update_price(self, k, v):
         self.price_table[k] = v
@@ -618,6 +625,8 @@ class MainWindow(QWidget):
         self.sig_price_update.emit(price)
 
     def on_recalculate_price(self,s):
+        if isinstance(self.sender(), SettingsWidget):
+            self.expires = int(s)
         if self.table_widget.rowCount() == 0:
             self.sig_price_update.emit(0.00)
         if self.enforce_logical == 1 and self.table_widget.rowCount() > 0:
@@ -696,6 +705,7 @@ class MainWindow(QWidget):
         self.cscript_loader_thread.wait()
         self.workload_loader_thread.wait()
         self.updater_thread.wait()
+        print("waiting for fleet updater")
         self.fleet_updater_thread.wait()
         self.request_thread.wait()
         self.price_calculator_thread.wait()

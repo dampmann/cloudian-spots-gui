@@ -17,6 +17,8 @@ class RemoteCombo(QWidget):
         self.combo_box = QComboBox()
         self.combo_box.addItem("Select {}".format(self.kind))
         self.reload_button = QPushButton("reload")
+        self.reload_button.setDefault(False)
+        self.reload_button.setAutoDefault(False)
         self.reload_button.clicked.connect(self.on_reload_clicked)
         self.main_layout.addWidget(self.combo_box, 0 ,0)
         self.main_layout.addWidget(self.reload_button, 0 ,1)

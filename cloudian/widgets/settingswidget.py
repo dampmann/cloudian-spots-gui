@@ -1,11 +1,13 @@
 
 from PyQt5.QtCore import QObject, pyqtSignal
 from PyQt5.QtWidgets import QWidget, QLabel, QSpinBox, QCheckBox, QGridLayout
+from PyQt5.QtWidgets import QPushButton, QHBoxLayout
 
 class SettingsWidget(QWidget):
     sig_expire_changed = pyqtSignal(str)
     sig_delete_volumes = pyqtSignal(int)
     sig_do_install = pyqtSignal(int)
+    sig_ok_clicked = pyqtSignal()
 
     def __init__(self):
         QWidget.__init__(self)
@@ -29,6 +31,12 @@ class SettingsWidget(QWidget):
         self.spinner_label = QLabel("Cluster expires after x hours")
         self.main_layout.addWidget(self.expires_spinner, 2, 0)
         self.main_layout.addWidget(self.spinner_label, 2, 1)
+        self.layout_h = QHBoxLayout()
+        self.layout_h.addStretch()
+        self.ok_button = QPushButton("OK")
+        self.ok_button.clicked.connect(self.sig_ok_clicked)
+        self.layout_h.addWidget(self.ok_button)
+        self.main_layout.addLayout(self.layout_h, 3, 1, 1, 2)
         self.setLayout(self.main_layout)
 
     def on_expire_change(self,unused):

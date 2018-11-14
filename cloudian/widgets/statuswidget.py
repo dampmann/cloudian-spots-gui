@@ -113,6 +113,14 @@ class StatusWidget(QWidget):
                 self.table_widget.resizeColumnsToContents()
                 self.table_widget.resizeRowsToContents()
                 found = True
+                if item['master'] == True:
+                    for c in range(len(self.table_headers)):
+                        self.table_widget.cellWidget(i,c).setStyleSheet(
+                                "font-weight: bold; color: green")
+                else:
+                    for c in range(len(self.table_headers)):
+                        self.table_widget.cellWidget(i,c).setStyleSheet(
+                                "font-weight: normal; color: black")
 
         if not found:
             self.table_widget.insertRow(0)
@@ -142,4 +150,13 @@ class StatusWidget(QWidget):
             self.table_widget.cellWidget(0,7).setMargin(10)
             self.table_widget.resizeColumnsToContents()
             self.table_widget.resizeRowsToContents()
+
+            if item['master'] == True:
+                for c in range(len(self.table_headers)):
+                    self.table_widget.cellWidget(0,c).setStyleSheet(
+                            "font-weight: bold; color: green")
+            else:
+                for c in range(len(self.table_headers)):
+                    self.table_widget.cellWidget(0,c).setStyleSheet(
+                            "font-weight: normal; color: black")
 

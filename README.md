@@ -70,13 +70,13 @@ After a few seconds your fleet request(s) should show up in the "Fleet Requests"
 
 ## The deployment
 
-The cluster will always we launched in the region and availability zone you find in the first row of the table **if** enforce logical separation is checked. The master node is the one with the lowest ip address in this region and availability zone.
+The cluster will always we launched in the region and availability zone you find in the first row of the table **if** enforce logical separation is checked. The master node is the one with the lowest ip address in this region and availability zone. It will be highlighted in a bold, green font as soon as the master election finished. If you started more than one cluster you will see more than one highlighted entry, one for each cluster.
 
 ## How to connect
 
 The ssh keys to access your instances will be downloaded to your home directory. You can connect to an instance using the public ip like this:
 
-    ssh -i AWS-SPOTS-KEY root@<public_ip>
+    ssh -i ~/AWS-SPOTS-KEY root@<public_ip>
 You can check the status of the automatic installation by looking at 
 
     /root/cloudian-spots/startup.log

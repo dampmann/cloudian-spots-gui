@@ -217,7 +217,7 @@ else
                 cp -f driver.conf cosbench/conf/
                 cd /root/cloudian-spots/cosbench
                 echo -e "$(date) Starting cosbench  \e[1;33m [ PENDING ] \e[0m" >>/root/cloudian-spots/startup.log
-                ./start-cosbench.sh
+                ./start-cosbench.sh >>/root/cloudian-spots/startup.log
                 cd /root/cloudian-spots/
                 if [ $cb_wl != "None" ]; then
                     ak=$(cat /root/cloudian-spots/ak)
@@ -254,7 +254,7 @@ else
             echo -e "$(date) Unpacking cosbench  \e[1;33m [ PENDING ] \e[0m" >>/root/cloudian-spots/startup.log
             unzip cosbench.zip
             echo -e "$(date) Unpacking cosbench  \e[1;32m [ DONE ] \e[0m" >>/root/cloudian-spots/startup.log
-            ./cosbenchcfg.sh
+            ./cosbenchcfg.sh >>/root/cloudian-spots/startup.log
         fi
         echo "Not the master node, done." >> /root/cloudian-spots/startup.log
     fi

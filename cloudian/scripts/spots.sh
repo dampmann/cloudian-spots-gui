@@ -100,6 +100,7 @@ hn=$(echo "ch-${this_region}-${this_az}-${hsuffix1}-${hsuffix2}")
 lhn=$(curl http://169.254.169.254/latest/meta-data/local-hostname/ | cut -d '.' -f 2-)
 echo "$ip ${hn}.${lhn} $hn" >> /etc/hosts
 hostname $hn
+echo $hn > /etc/hostname
 sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
 sed -i 's/#PermitRootLogin yes/PermitRootLogin yes/' /etc/ssh/sshd_config
 if [ $v == 6 ]; then service sshd restart; else systemctl restart sshd.service; fi
@@ -216,7 +217,7 @@ else
                 cp -f driver.conf cosbench/conf/
                 cd /root/cloudian-spots/cosbench
                 echo -e "$(date) Starting cosbench  \e[1;33m [ PENDING ] \e[0m" >>/root/cloudian-spots/startup.log
-                ./start-cosbench.sh
+                ./start-cosbench.sh >>/root/cloudian-spots/startup.log
                 cd /root/cloudian-spots/
                 if [ $cb_wl != "None" ]; then
                     ak=$(cat /root/cloudian-spots/ak)
@@ -253,7 +254,7 @@ else
             echo -e "$(date) Unpacking cosbench  \e[1;33m [ PENDING ] \e[0m" >>/root/cloudian-spots/startup.log
             unzip cosbench.zip
             echo -e "$(date) Unpacking cosbench  \e[1;32m [ DONE ] \e[0m" >>/root/cloudian-spots/startup.log
-            ./cosbenchcfg.sh
+            ./cosbenchcfg.sh >>/root/cloudian-spots/startup.log
         fi
         echo "Not the master node, done." >> /root/cloudian-spots/startup.log
     fi

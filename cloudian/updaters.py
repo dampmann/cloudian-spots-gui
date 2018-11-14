@@ -196,11 +196,11 @@ class FleetUpdater(QObject):
                             region_name=r['RegionName'])
                     ec2 = s.resource('ec2')
                     ec2sc = s.client('ec2')
+                    fleets = ec2sc.describe_spot_fleet_requests()
                     if self.stop_exec:
                         self.timer.stop()
                         QThread.currentThread().quit()
                         return
-                    fleets = ec2sc.describe_spot_fleet_requests()
                     if 'SpotFleetRequestConfigs' in fleets:
                         f = self.get_fleets(fleets['SpotFleetRequestConfigs'])
                         if not f is None:
@@ -330,12 +330,15 @@ class InstanceUpdater(QObject):
                             'instance_id':i.instance_id,
                             'private_ip': i.private_ip_address,
                             'public_ip': i.public_ip_address,
-                            'delete': item['delete']
+                            'delete': item['delete'],
+                            'master': False
                         }
             
                         for t in i.tags:
                             if t['Key'] == 'cloudian-spots':
                                 update_item['tag'] = t['Value']
+                            if t['Key'] == 'cloudian-spots-role':
+                                update_item['master'] = True
 
                         if i.subnet and i.subnet.availability_zone:
                             update_item['az'] = i.subnet.availability_zone

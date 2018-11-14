@@ -48,11 +48,12 @@ class S3ResourceLoader(QObject):
                     for o in response['Contents']:
                         if self.rfilter != '':
                             if pathlib.PurePosixPath(o['Key']).name.endswith(self.rfilter):
-                                self.items.append(pathlib.PurePosixPath(o['Key']).name)
+                                self.items.append(
+                                        o['Key'].replace(self.prefix,''))
                                 self.sig_progress.emit("Loaded {}".format(
                                             pathlib.PurePosixPath(o['Key']).name))
                         else:
-                            self.items.append(pathlib.PurePosixPath(o['Key']).name)
+                            self.items.append(o['Key'].replace(self.prefix,''))
                             self.sig_progress.emit("Loaded {}".format(
                                         pathlib.PurePosixPath(o['Key']).name))
                 self.sig_update_finished.emit(self.items)
